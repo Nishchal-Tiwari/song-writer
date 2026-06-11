@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: phonetics
+      POSTGRES_PASSWORD: phonetics
+      POSTGRES_DB: phonetics
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U phonetics -d phonetics']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  phonetik:
+    build:
+      context: ./phonetik
+      dockerfile: Dockerfile
+    ports:
+      - '1273:1273'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:1273/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
