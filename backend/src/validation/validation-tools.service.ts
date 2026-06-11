@@ -75,10 +75,31 @@ export class ValidationToolsService {
       template,
     );
 
-    return this.formatVerseResult(lines, validation);
+    return this.formatVerseResult(lines, validation, template);
   }
 
-  formatVerseResult(lines: string[], validation: CandidateValidationResult) {
+  async compareRhyme(word1: string, word2: string) {
+    const comparison = await this.dictionary.compareRhyme(word1, word2);
+    return {
+      word1: comparison.word1,
+      word2: comparison.word2,
+      valid: comparison.valid,
+      rhymeType: comparison.rhymeType,
+      confidence: comparison.confidence,
+      failure: comparison.failure,
+      guidance: comparison.valid
+        ? `"${comparison.word1}" and "${comparison.word2}" are a valid perfect rhyme pair.`
+        : `"${comparison.word1}" and "${comparison.word2}" do NOT rhyme perfectly (${comparison.rhymeType}). Pick a different pair — try room/gloom, night/light, alone/known, sleep/deep.`,
+    };
+  }
+
+  formatVerseResult(
+    lines: string[],
+    validation: CandidateValidationResult,
+    template?: SectionTemplate,
+  ) {
+    const guidance = this.buildGuidance(validation, template);
+
     return {
       valid: validation.valid,
       lines,
@@ -92,7 +113,58 @@ export class ValidationToolsService {
       })),
       rhymeResults: validation.rhymes,
       failures: validation.failures,
+      guidance,
     };
+  }
+
+  private buildGuidance(
+    validation: CandidateValidationResult,
+    template?: SectionTemplate,
+  ): string[] {
+    const guidance: string[] = [];
+
+    for (const rhyme of validation.rhymes) {
+      if (rhyme.valid) {
+        continue;
+      }
+
+      guidance.push(
+        `RHYME FIX — Lines ${rhyme.lineA} and ${rhyme.lineB} must end with perfect rhymes. ` +
+          `Got "${rhyme.wordA}" / "${rhyme.wordB}" (${rhyme.rhymeType ?? 'no match'}). ` +
+          `Change BOTH line endings to a verified pair (use compare_rhyme first). ` +
+          `Good pairs: room/gloom, night/light, alone/known, deep/sleep.`,
+      );
+    }
+
+    for (const line of validation.lines) {
+      if (line.valid) {
+        continue;
+      }
+
+      const syllableHint = line.failures.some((f) => f.includes('syllables'))
+        ? ` Target exactly ${line.expected.syllableCount} syllables (currently ${line.actual.syllableCount}).`
+        : '';
+
+      guidance.push(
+        `LINE ${line.lineNumber} FIX — ${line.failures.join('; ')}.${syllableHint} ` +
+          `Rewrite only line ${line.lineNumber}; keep its end rhyme word if other paired lines already pass.`,
+      );
+    }
+
+    if (!validation.valid && guidance.length === 0) {
+      guidance.push(
+        'Verse failed validation. Re-check syllable counts and rhyme end words for every line.',
+      );
+    }
+
+    if (template?.rhymeScheme) {
+      guidance.push(
+        `Rhyme scheme ${template.rhymeScheme.toUpperCase()}: paired lines must share the same end rhyme sound. ` +
+          `Plan end words BEFORE writing each line, then verify with compare_rhyme.`,
+      );
+    }
+
+    return guidance;
   }
 
   getOpenAiTools() {
@@ -116,9 +188,26 @@ export class ValidationToolsService {
       {
         type: 'function' as const,
         function: {
+          name: 'compare_rhyme',
+          description:
+            'Check if two words rhyme perfectly. Use this BEFORE writing lines to pick end rhyme words for each rhyme group.',
+          parameters: {
+            type: 'object',
+            properties: {
+              word1: { type: 'string', description: 'First end rhyme word' },
+              word2: { type: 'string', description: 'Second end rhyme word' },
+            },
+            required: ['word1', 'word2'],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        function: {
           name: 'validate_line',
           description:
-            'Validate one lyric line against its syllable count and stress pattern constraint.',
+            'Validate one lyric line against its syllable count (and stress if enabled). Does NOT check rhyme — use validate_verse for that.',
           parameters: {
             type: 'object',
             properties: {
@@ -135,7 +224,7 @@ export class ValidationToolsService {
         function: {
           name: 'validate_verse',
           description:
-            'Validate a full verse against all line constraints and the rhyme scheme. Call this before presenting lyrics to the user. If invalid, revise and call again.',
+            'Validate a full verse against all line constraints and the rhyme scheme. Returns a "guidance" array with exact fixes when invalid — read it and revise only the failing lines.',
           parameters: {
             type: 'object',
             properties: {

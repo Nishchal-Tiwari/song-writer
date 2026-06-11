@@ -38,6 +38,15 @@ export function wordLookupVariants(word: string): string[] {
 
   add(normalized);
 
+  // Contractions: aren't → are, don't → do, etc.
+  if (normalized.includes("'")) {
+    const expanded = normalized.replace(/n't$/, '').replace(/'s$/, '').replace(/'/g, '');
+    add(expanded);
+    if (normalized.endsWith("n't")) {
+      add(normalized.slice(0, -3));
+    }
+  }
+
   if (normalized.endsWith("'s")) {
     add(normalized.slice(0, -2));
   }

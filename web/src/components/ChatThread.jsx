@@ -26,8 +26,9 @@ function AssistantResult({ metadata }) {
         </div>
       ) : (
         <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-          No lines passed validation. Try simpler rhyme words like room/moon or
-          night/light.
+          No lines passed validation. Syllables may be correct but rhymes often
+          fail — use perfect pairs like night/light (lines 1&4) and room/gloom
+          (lines 2&3) for ABBA.
         </p>
       )}
 

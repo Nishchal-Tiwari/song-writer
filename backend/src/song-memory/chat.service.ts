@@ -167,6 +167,7 @@ export class ChatService {
   private buildTemplate(section: Section) {
     return {
       rhymeScheme: section.rhymeScheme,
+      validateStress: section.validateStress ?? false,
       lineConstraints: section.lineConstraints.map((constraint) => ({
         lineNumber: constraint.lineNumber,
         syllableCount: constraint.syllableCount,
@@ -176,8 +177,29 @@ export class ChatService {
   }
 
   private buildAssistantContent(result: GenerationResult) {
-    return result.passed.length > 0
-      ? `Here ${result.passed.length === 1 ? 'is' : 'are'} ${result.passed.length} valid suggestion${result.passed.length === 1 ? '' : 's'} that passed phonetic validation.`
-      : `I couldn't produce lines that pass all constraints yet. The model used validation tools but nothing fully matched — try simpler rhyme words like room/moon or night/light.`;
+    if (result.passed.length > 0) {
+      return `Here ${result.passed.length === 1 ? 'is' : 'are'} ${result.passed.length} valid suggestion${result.passed.length === 1 ? '' : 's'} that passed phonetic validation.`;
+    }
+
+    const rejected = result.rejected[0];
+    const rhymeFail = rejected?.validation?.rhymes?.some((r) => !r.valid);
+    const syllableFail = rejected?.validation?.lines?.some(
+      (l) => !l.syllablesMatch,
+    );
+
+    if (rhymeFail && !syllableFail) {
+      return (
+        'Syllable counts matched, but the rhyme scheme failed. ' +
+        'Lines in the same rhyme group must end with perfect rhymes ' +
+        '(e.g. night/light for lines 1&4, room/gloom for lines 2&3 in ABBA). ' +
+        'Try again — pick end rhyme words with compare_rhyme first.'
+      );
+    }
+
+    return (
+      'Could not produce lines that pass all constraints yet. ' +
+      'Pick simple end rhyme pairs first (night/light, room/gloom), ' +
+      'then write each line to match its syllable count.'
+    );
   }
 }

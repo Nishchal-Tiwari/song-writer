@@ -104,6 +104,31 @@ export default function CandidateCard({ candidate, index, passed }) {
                 ))}
               </div>
             ))}
+
+            {candidate.validation.rhymes?.length ? (
+              <div className="space-y-2 border-t border-border/60 pt-2">
+                <p className="text-xs font-medium">Rhyme checks</p>
+                {candidate.validation.rhymes.map((rhyme) => (
+                  <div
+                    key={`${rhyme.lineA}-${rhyme.lineB}`}
+                    className="flex flex-wrap items-center gap-2 text-xs"
+                  >
+                    {rhyme.valid ? (
+                      <Check className="h-3 w-3 text-[hsl(var(--success))]" />
+                    ) : (
+                      <X className="h-3 w-3 text-destructive" />
+                    )}
+                    <span className={rhyme.valid ? 'text-muted-foreground' : 'text-destructive'}>
+                      L{rhyme.lineA} & L{rhyme.lineB}:{' '}
+                      <strong>{rhyme.wordA}</strong> / <strong>{rhyme.wordB}</strong>
+                      {rhyme.valid
+                        ? ' ✓'
+                        : ` — ${rhyme.failure ?? 'no perfect rhyme'}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </CardContent>

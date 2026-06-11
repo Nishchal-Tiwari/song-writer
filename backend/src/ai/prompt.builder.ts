@@ -12,6 +12,7 @@ export class PromptBuilder {
     const validateStress = template.validateStress ?? false;
     const rhymePlan = this.describeRhyme(template);
     const lineSpec = this.describeLines(template, validateStress);
+    const endWordPlan = this.describeEndWordPlan(template);
 
     const lines = [
       'You are a songwriting assistant. Lyrics must fit an existing melody,',
@@ -26,43 +27,47 @@ export class PromptBuilder {
       'Rhyme scheme:',
       rhymePlan,
       '',
+      'End-word plan (do this FIRST, before writing any line):',
+      endWordPlan,
+      '',
       'Hard rules for word choice:',
-      '- Use simple, common English words.',
-      '- Avoid rare words, archaic words, slang, and misspellings.',
+      '- Use simple, common English words only.',
+      '- Avoid rare words, archaic words, slang, contractions (don\'t, aren\'t), and misspellings.',
       '- Avoid proper names and made-up words (they break pronunciation lookup).',
-      '- Prefer simple rhyme pairs: room/moon, night/light, alone/known, sleep/deep, day/away.',
+      '- Each line MUST end with its planned rhyme word.',
+      '- Verify every planned end-word pair with compare_rhyme before writing lines.',
     ];
 
     if (validateStress) {
       lines.push(
         '',
         'Stress pattern: 0 = unstressed, 1 = stressed. Each line MUST match its',
-        'stress pattern exactly. This is the hardest constraint — choose words',
-        'whose natural stress lines up, and verify with the tools.',
+        'stress pattern exactly. Verify with validate_line.',
       );
     } else {
       lines.push(
         '',
-        'Stress patterns are NOT enforced for this section. Focus only on the',
-        'exact syllable count per line and the rhyme scheme. Do not reject a line',
-        'for stress; the tools will not fail lines on stress.',
+        'Stress is NOT enforced. Focus only on exact syllable count and rhyme.',
       );
     }
 
     lines.push(
       '',
-      'You have validation tools (like MCP functions). You MUST use them:',
-      '1. lookup_word — confirm a rhyme/end word exists and check its syllables',
-      '2. validate_line — check one line against its constraints',
-      '3. validate_verse — check the full verse including rhyme scheme',
+      'Tools (use in this order):',
+      '1. compare_rhyme — verify two end words rhyme perfectly BEFORE writing',
+      '2. lookup_word — confirm a word exists in the dictionary and check syllables',
+      '3. validate_line — check one line\'s syllable count',
+      '4. validate_verse — check the full verse including rhyme scheme',
       '',
-      'Workflow (generate → validate → read the failure → fix → repeat):',
-      '- Draft each line to match the required syllable count.',
-      '- Call validate_line for each line. If it fails, read the "failures"',
-      '  field, change only what is wrong (e.g. add/remove a syllable or swap',
-      '  the end word), and validate again.',
-      '- When all lines pass, call validate_verse to confirm the rhyme scheme.',
-      '- Only stop once validate_verse returns "valid": true.',
+      'Workflow:',
+      'Step 1: Pick end rhyme words for each rhyme group. compare_rhyme each pair.',
+      'Step 2: Write one line at a time ending with the planned word.',
+      'Step 3: validate_line after each line. If it fails, read "failures" and fix.',
+      'Step 4: validate_verse when all lines are done.',
+      'Step 5: If validate_verse fails, read the "guidance" array and fix ONLY what it says.',
+      'Step 6: Repeat until validate_verse returns valid: true.',
+      '',
+      'Never submit a verse without calling validate_verse. Never stop until valid: true.',
     );
 
     return lines.join('\n');
@@ -73,9 +78,8 @@ export class PromptBuilder {
       'Content request (what each line should say or evoke):',
       userRequest,
       '',
-      'Keep the meaning close to the request, but the formal constraints',
-      '(syllable count and rhyme) take priority. Validate every line with the',
-      'tools before you finish.',
+      'Formal constraints (syllable count + rhyme) take priority over meaning.',
+      'Start by picking end rhyme words with compare_rhyme, then write each line.',
     ].join('\n');
   }
 
@@ -109,7 +113,7 @@ export class PromptBuilder {
       .filter(([, lineNumbers]) => lineNumbers.length > 1)
       .map(
         ([label, lineNumbers]) =>
-          `  Lines ${lineNumbers.join(' & ')} rhyme (group ${label})`,
+          `  Group ${label}: lines ${lineNumbers.join(' & ')} must end with the same rhyme sound`,
       );
 
     if (rhymingGroups.length === 0) {
@@ -117,5 +121,42 @@ export class PromptBuilder {
     }
 
     return [`  Scheme: ${scheme}`, ...rhymingGroups].join('\n');
+  }
+
+  private describeEndWordPlan(template: SectionTemplate): string {
+    const scheme = template.rhymeScheme?.toUpperCase() ?? '';
+    const suggestions: Record<string, [string, string]> = {
+      A: ['night', 'light'],
+      B: ['room', 'gloom'],
+      C: ['day', 'away'],
+      D: ['heart', 'apart'],
+    };
+
+    const groups = new Map<string, number[]>();
+    scheme.split('').forEach((label, index) => {
+      if (!groups.has(label)) {
+        groups.set(label, []);
+      }
+      groups.get(label)?.push(index + 1);
+    });
+
+    const plans: string[] = [];
+
+    for (const [label, lineNumbers] of groups) {
+      if (lineNumbers.length < 2) {
+        continue;
+      }
+
+      const [word1, word2] = suggestions[label] ?? ['word1', 'word2'];
+      plans.push(
+        `  Group ${label} (lines ${lineNumbers.join(', ')}): end with words like "${word1}" / "${word2}" — verify with compare_rhyme`,
+      );
+    }
+
+    if (plans.length === 0) {
+      return '  No rhyming lines required.';
+    }
+
+    return plans.join('\n');
   }
 }

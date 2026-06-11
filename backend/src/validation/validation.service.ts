@@ -65,6 +65,11 @@ export class ValidationService {
     switch (name) {
       case 'lookup_word':
         return this.tools.lookupWord(String(args.word ?? ''));
+      case 'compare_rhyme':
+        return this.tools.compareRhyme(
+          String(args.word1 ?? ''),
+          String(args.word2 ?? ''),
+        );
       case 'validate_line':
         return this.tools.validateLine(
           String(args.line ?? ''),

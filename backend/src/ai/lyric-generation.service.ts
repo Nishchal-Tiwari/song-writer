@@ -117,7 +117,7 @@ export class LyricGenerationService {
 
       const response = await this.getOpenAI().chat.completions.create({
         model: this.model,
-        temperature: 0.7,
+        temperature: 0.4,
         messages,
         tools,
         tool_choice: 'auto',
@@ -275,6 +275,11 @@ export class LyricGenerationService {
       case 'lookup_word': {
         const word = String(args.word ?? '');
         return `Looking up pronunciation for “${word}”`;
+      }
+      case 'compare_rhyme': {
+        const w1 = String(args.word1 ?? '');
+        const w2 = String(args.word2 ?? '');
+        return `Checking rhyme: “${w1}” / “${w2}”`;
       }
       case 'validate_line': {
         const lineNumber = Number(args.lineNumber ?? 0);
